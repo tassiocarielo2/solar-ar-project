@@ -1,148 +1,25 @@
+
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-    <!-- GLTF loader para modelos 3D -->
-    <script src="https://unpkg.com/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
-    <style>
-      body {
-        margin: 0;
-        overflow: hidden;
-      }
-      
-      /* Indicador de status */
-      #status {
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background-color: rgba(0, 0, 0, 0.7);
-        color: white;
-        padding: 10px;
-        border-radius: 5px;
-        text-align: center;
-        z-index: 100;
-        font-family: Arial, sans-serif;
-      }
-      
-      /* Versão do aplicativo */
-      #version {
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        background-color: rgba(0, 0, 0, 0.7);
-        color: white;
-        padding: 5px 10px;
-        border-radius: 5px;
-        font-family: Arial, sans-serif;
-        z-index: 100;
-      }
-    </style>
   </head>
   <body>
-    <!-- Indicador de versão -->
-    <div id="version">v1.1</div>
-    <!-- Indicador de status -->
-    <div id="status">Aguardando imagem de Júpiter...</div>
-    
-    <a-scene 
-      mindar-image="imageTargetSrc: ./jupiter.mind;" 
-      vr-mode-ui="enabled: false" 
-      device-orientation-permission-ui="enabled: true"
-      renderer="colorManagement: true; physicallyCorrectLights: true; outputEncoding: sRGB"
-      loading-screen="dotsColor: white; backgroundColor: black">
-      
-      <!-- Carregar assets (modelo 3D de Júpiter) -->
+    <a-scene mindar-image="imageTargetSrc: /target.mind;" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"></a-scene>
       <a-assets>
-        <a-asset-item id="jupiterModel" src="./jupiter.glb"></a-asset-item>
-        <!-- Você pode usar um modelo temporário enquanto cria o seu próprio -->
-        <!-- <a-asset-item id="jupiterModel" src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@master/aframe/examples/image-tracking/nft/trex/scene.gltf"></a-asset-item> -->
+	<img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" />
+	<a-asset-item id="avatarModel" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/softmind/scene.gltf"></a-asset-item>
       </a-assets>
-      
+
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-      
-      <!-- Target da imagem de Júpiter -->
+
       <a-entity mindar-image-target="targetIndex: 0">
-        <!-- Modelo 3D de Júpiter com animação de rotação -->
-        <a-entity 
-          id="jupiter-model"
-          gltf-model="#jupiterModel"
-          position="0 0 0"
-          scale="0.5 0.5 0.5"
-          rotation="0 0 0"
-          animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear">
-        </a-entity>
-        
-        <!-- Esfera simples como fallback caso o modelo não carregue -->
-        <a-sphere 
-          id="jupiter-fallback"
-          color="#E8B27D" 
-          radius="0.5" 
-          position="0 0 0" 
-          visible="false"
-          animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear">
-          <!-- Textura simplificada com listras para simular Júpiter -->
-          <a-entity
-            geometry="primitive: torus; radius: 0.52; radiusTubular: 0.01"
-            material="color: #8B5A2B"
-            rotation="80 0 0">
-          </a-entity>
-          <a-entity
-            geometry="primitive: torus; radius: 0.55; radiusTubular: 0.01"
-            material="color: #8B5A2B"
-            rotation="75 0 0">
-          </a-entity>
-        </a-sphere>
+        <a-plane src="#card" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
+        <a-gltf-model rotation="0 0 0 " position="0 0 0.1" scale="0.005 0.005 0.005" src="#avatarModel"
+          animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate"
+        >
       </a-entity>
     </a-scene>
-
-    <script>
-      // Definir versão
-      const VERSION = "1.1"; 
-      document.getElementById('version').textContent = `v${VERSION}`;
-      
-      const statusElement = document.getElementById('status');
-      const sceneEl = document.querySelector('a-scene');
-      const jupiterModel = document.getElementById('jupiter-model');
-      const jupiterFallback = document.getElementById('jupiter-fallback');
-      
-      // Monitorar eventos do MindAR
-      sceneEl.addEventListener('arError', (event) => {
-        statusElement.textContent = "Erro ao inicializar AR. Verifique a câmera.";
-        statusElement.style.backgroundColor = "rgba(255, 0, 0, 0.7)";
-      });
-      
-      sceneEl.addEventListener('arReady', (event) => {
-        statusElement.textContent = "AR Pronta! Aponte para a imagem de Júpiter.";
-      });
-      
-      // Detectou a imagem alvo
-      sceneEl.addEventListener('targetFound', (event) => {
-        console.log("Imagem de Júpiter encontrada!");
-        statusElement.textContent = "Júpiter encontrado! ✓";
-        statusElement.style.backgroundColor = "rgba(0, 255, 0, 0.7)";
-      });
-      
-      // Perdeu a imagem alvo
-      sceneEl.addEventListener('targetLost', (event) => {
-        console.log("Imagem de Júpiter perdida");
-        statusElement.textContent = "Júpiter perdido! Reposicione a câmera.";
-        statusElement.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
-      });
-      
-      // Verificar se o modelo 3D carregou corretamente
-      jupiterModel.addEventListener('model-error', () => {
-        console.error("Erro ao carregar modelo 3D de Júpiter");
-        // Mostrar fallback se o modelo falhar
-        jupiterFallback.setAttribute('visible', true);
-      });
-      
-      // Quando o modelo for carregado com sucesso
-      jupiterModel.addEventListener('model-loaded', () => {
-        console.log("Modelo de Júpiter carregado com sucesso");
-        statusElement.textContent = "AR Pronta! Aponte para a imagem de Júpiter.";
-      });
-    </script>
   </body>
 </html>
