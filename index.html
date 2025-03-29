@@ -1,6 +1,7 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/dist/mindar-image.prod.js"></script>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <style>
@@ -16,6 +17,7 @@
         height: 100% !important;
         top: 0 !important;
         left: 0 !important;
+        opacity: 1 !important;
       }
       
       #mindar-ui-container {
@@ -96,6 +98,25 @@
         z-index: -1;
         display: none;
       }
+
+      #controls {
+        position: fixed;
+        bottom: 60px;
+        right: 10px;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      
+      .control-button {
+        background-color: #4CAF50;
+        color: white;
+        padding: 10px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
@@ -109,8 +130,13 @@
     <div id="camera-status">Status da câmera: Aguardando...</div>
     <video id="video-fallback" autoplay playsinline></video>
     
+    <div id="controls">
+      <button class="control-button" id="force-camera">Forçar Câmera</button>
+      <button class="control-button" id="toggle-view">Alternar Visualização</button>
+    </div>
+
     <a-scene stats mindar-image="imageTargetSrc: ./targets.mind; showStats: true; uiScanning: true;" 
-             device-orientation-permission-ui="enabled: true"
+             embedded
              vr-mode-ui="enabled: false" 
              renderer="precision: mediump; antialias: true; logarithmicDepthBuffer: true;"
              loading-screen="enabled: false">
@@ -136,6 +162,9 @@
       const restartButton = document.getElementById('restart-button');
       const cameraStatus = document.getElementById('camera-status');
       const videoFallback = document.getElementById('video-fallback');
+      const forceCamera = document.getElementById('force-camera');
+      const toggleView = document.getElementById('toggle-view');
+      let currentStream = null;
       
       function log(message) {
         console.log(message);
@@ -204,14 +233,13 @@
           audio: false
         })
           .then(function(stream) {
+            currentStream = stream;
             updateLoadingStatus("Câmera acessada com sucesso!");
             updateCameraStatus("Câmera ativa", stream);
             
-            setTimeout(() => {
-              if (document.querySelector('.a-canvas').style.display === 'none' || !document.querySelector('.a-canvas').style.opacity) {
-                showVideoFallback(stream);
-              }
-            }, 3000);
+            showVideoFallback(stream);
+            
+            setTimeout(checkARVisibility, 1000);
           })
           .catch(function(err) {
             showError(`Erro ao acessar a câmera: ${err.message}`);
@@ -219,27 +247,49 @@
       }
       
       function showVideoFallback(stream) {
-        updateLoadingStatus("Usando visualização direta da câmera como fallback");
+        updateLoadingStatus("Usando visualização direta da câmera");
         videoFallback.srcObject = stream;
         videoFallback.style.display = 'block';
+        videoFallback.style.zIndex = '1';
+        loadingScreen.style.display = 'none';
+        
+        videoFallback.onloadedmetadata = function() {
+          videoFallback.play().catch(e => {
+            log(`Erro ao reproduzir vídeo: ${e}`);
+          });
+          log(`Vídeo iniciado: ${videoFallback.videoWidth}x${videoFallback.videoHeight}`);
+        };
       }
 
       function checkARVisibility() {
         const canvas = document.querySelector('.a-canvas');
         if (canvas) {
           const style = window.getComputedStyle(canvas);
-          log(`Canvas AR visível: ${style.display !== 'none' && style.opacity !== '0'}`);
+          log(`Canvas AR: visível=${style.display !== 'none'}, opacity=${style.opacity}, zIndex=${style.zIndex}`);
           
-          if (style.display === 'none' || style.opacity === '0') {
-            log('Tentando forçar visibilidade do canvas AR');
-            canvas.style.display = 'block';
-            canvas.style.opacity = '1';
-            canvas.style.zIndex = '0';
-          }
+          canvas.style.display = 'block';
+          canvas.style.opacity = '1';
         } else {
           log('Canvas AR não encontrado!');
         }
       }
+      
+      forceCamera.addEventListener('click', () => {
+        initMindARManually();
+      });
+      
+      toggleView.addEventListener('click', () => {
+        const canvas = document.querySelector('.a-canvas');
+        if (videoFallback.style.zIndex === '1') {
+          videoFallback.style.zIndex = '-1';
+          canvas.style.zIndex = '1';
+          log('Alternado para visualização AR');
+        } else {
+          videoFallback.style.zIndex = '1';
+          canvas.style.zIndex = '-1';
+          log('Alternado para visualização direta da câmera');
+        }
+      });
       
       sceneEl.addEventListener('loaded', function() {
         log("A-Frame carregado!");
@@ -304,6 +354,24 @@
           document.body.appendChild(switchButton);
         }
       }, 10000);
+
+      setTimeout(() => {
+        initMindARManually();
+      }, 500);
+      
+      setInterval(() => {
+        if (videoFallback.paused && videoFallback.style.display === 'block') {
+          log('Vídeo pausado, tentando retomar...');
+          videoFallback.play().catch(e => log(`Erro ao retomar: ${e}`));
+        }
+      }, 2000);
+      
+      setTimeout(() => {
+        if (!document.querySelector('.mindar-ui-scanning')) {
+          log('Interface de escaneamento do MindAR não detectada!');
+          showError('O Mind AR pode não ter inicializado corretamente');
+        }
+      }, 8000);
     </script>
   </body>
 </html>
