@@ -9,14 +9,97 @@
       .a-enter-vr-button {
         display: none !important;
       }
+      
+      #loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 999;
+      }
+      
+      #error-message {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        background-color: rgba(255, 0, 0, 0.7);
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        display: none;
+        z-index: 1000;
+      }
     </style>
   </head>
   <body>
-    <a-scene embedded mindar-image="imageTargetSrc: ./targets.mind;" device-orientation-permission-ui="enabled: true">
+    <div id="loading-screen">Carregando AR, aguarde...</div>
+    <div id="error-message"></div>
+    
+    <a-scene embedded mindar-image="imageTargetSrc: ./targets.mind;" device-orientation-permission-ui="enabled: true"
+             vr-mode-ui="enabled: false" 
+             loading-screen="enabled: false"
+             arjs="trackingMethod: best; debugUIEnabled: false;">
+      
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+      
       <a-entity mindar-image-target="targetIndex: 0">
         <a-plane color="blue" opacity="0.5" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
       </a-entity>
     </a-scene>
+
+    <script>
+      const sceneEl = document.querySelector('a-scene');
+      const loadingScreen = document.getElementById('loading-screen');
+      const errorMessage = document.getElementById('error-message');
+      
+      function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
+        loadingScreen.style.display = 'none';
+        console.error(message);
+      }
+
+      // Eventos de ciclo de vida do Mind AR
+      sceneEl.addEventListener('arError', (event) => {
+        showError('Erro na AR: Verifique se o navegador tem permissão para acessar a câmera ou se o arquivo de targets existe.');
+      });
+      
+      sceneEl.addEventListener('arReady', (event) => {
+        console.log('AR está pronta!');
+        loadingScreen.style.display = 'none';
+      });
+      
+      // Verificar se o arquivo de targets existe
+      fetch('./targets.mind')
+        .catch(() => {
+          showError('Arquivo de targets.mind não encontrado!');
+        });
+        
+      // Verificar se o dispositivo suporta AR
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showError('Seu navegador não suporta acesso à câmera! Use um navegador mais recente.');
+      }
+
+      // Tentar iniciar a câmera explicitamente se necessário
+      setTimeout(() => {
+        if (loadingScreen.style.display !== 'none') {
+          navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function(stream) {
+              stream.getTracks().forEach(track => track.stop());
+              console.log('Permissão da câmera concedida manualmente');
+            })
+            .catch(function(err) {
+              showError('Erro ao acessar a câmera: ' + err.message);
+            });
+        }
+      }, 3000);
+    </script>
   </body>
 </html>
