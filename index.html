@@ -5,7 +5,23 @@
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <style>
-
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+      
+      .a-canvas {
+        position: absolute !important;
+        z-index: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        top: 0 !important;
+        left: 0 !important;
+      }
+      
+      #mindar-ui-container {
+        z-index: 2 !important;
+      }
       
       #loading-screen {
         position: fixed;
@@ -47,7 +63,6 @@
         font-size: 12px;
       }
 
-      /* Botão de reiniciar */
       #restart-button {
         position: fixed;
         bottom: 10px;
@@ -60,6 +75,28 @@
         z-index: 1000;
         display: none;
       }
+
+      #camera-status {
+        position: fixed;
+        top: 40px;
+        left: 10px;
+        background-color: rgba(0, 0, 255, 0.7);
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        z-index: 1000;
+      }
+      
+      #video-fallback {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        z-index: -1;
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -70,11 +107,13 @@
     <div id="error-message"></div>
     <div id="debug-box"></div>
     <button id="restart-button" onclick="location.reload()">Reiniciar</button>
+    <div id="camera-status">Status da câmera: Aguardando...</div>
+    <video id="video-fallback" autoplay playsinline></video>
     
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind;" 
+    <a-scene stats mindar-image="imageTargetSrc: ./targets.mind; showStats: true; uiScanning: true;" 
              device-orientation-permission-ui="enabled: true"
              vr-mode-ui="enabled: false" 
-             renderer="precision: mediump; colorManagement: true; physicallyCorrectLights: true;"
+             renderer="precision: mediump; antialias: true; logarithmicDepthBuffer: true;"
              loading-screen="enabled: false">
       
       <a-assets>
@@ -84,6 +123,7 @@
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
       
       <a-entity mindar-image-target="targetIndex: 0">
+        <a-box position="0 0.1 0" color="red" scale="0.5 0.5 0.5" animation="property: rotation; to: 0 360 0; loop: true; dur: 5000; easing: linear"></a-box>
         <a-plane color="blue" opacity="0.5" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
       </a-entity>
     </a-scene>
@@ -95,8 +135,9 @@
       const debugBox = document.getElementById('debug-box');
       const loadingStatus = document.getElementById('loading-status');
       const restartButton = document.getElementById('restart-button');
+      const cameraStatus = document.getElementById('camera-status');
+      const videoFallback = document.getElementById('video-fallback');
       
-      // Função para registrar logs de depuração
       function log(message) {
         console.log(message);
         const timestamp = new Date().toLocaleTimeString();
@@ -116,9 +157,20 @@
         log(status);
       }
 
-      // Verificar pré-requisitos AR
+      function updateCameraStatus(status, stream) {
+        cameraStatus.textContent = `Status da câmera: ${status}`;
+        
+        if (stream) {
+          const tracks = stream.getVideoTracks();
+          if (tracks.length > 0) {
+            const settings = tracks[0].getSettings();
+            cameraStatus.innerHTML += `<br>Resolução: ${settings.width}x${settings.height}`;
+            cameraStatus.innerHTML += `<br>Dispositivo: ${tracks[0].label}`;
+          }
+        }
+      }
+
       function checkPrerequisites() {
-        // Verificar arquivo targets.mind
         updateLoadingStatus("Verificando arquivo de targets...");
         fetch('./targets.mind')
           .then(response => {
@@ -132,7 +184,6 @@
             showError(`Arquivo targets.mind não encontrado ou inacessível! Erro: ${error.message}`);
           });
           
-        // Verificar suporte à câmera
         updateLoadingStatus("Verificando suporte à câmera...");
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           showError('Seu navegador não suporta acesso à câmera! Use um navegador mais recente.');
@@ -142,23 +193,55 @@
         return true;
       }
       
-      // Inicialização manual do Mind AR (alternativa)
       function initMindARManually() {
         updateLoadingStatus("Tentando inicializar MindAR manualmente...");
         
-        // Solicitar acesso à câmera explicitamente
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        })
           .then(function(stream) {
             updateLoadingStatus("Câmera acessada com sucesso!");
-            // Iniciar Mind AR manualmente se necessário
-            // (Este é um fallback - normalmente isso já teria sido feito pelo componente)
+            updateCameraStatus("Câmera ativa", stream);
+            
+            setTimeout(() => {
+              if (document.querySelector('.a-canvas').style.display === 'none' || !document.querySelector('.a-canvas').style.opacity) {
+                showVideoFallback(stream);
+              }
+            }, 3000);
           })
           .catch(function(err) {
             showError(`Erro ao acessar a câmera: ${err.message}`);
           });
       }
+      
+      function showVideoFallback(stream) {
+        updateLoadingStatus("Usando visualização direta da câmera como fallback");
+        videoFallback.srcObject = stream;
+        videoFallback.style.display = 'block';
+      }
 
-      // Eventos de ciclo de vida do A-Frame e Mind AR
+      function checkARVisibility() {
+        const canvas = document.querySelector('.a-canvas');
+        if (canvas) {
+          const style = window.getComputedStyle(canvas);
+          log(`Canvas AR visível: ${style.display !== 'none' && style.opacity !== '0'}`);
+          
+          if (style.display === 'none' || style.opacity === '0') {
+            log('Tentando forçar visibilidade do canvas AR');
+            canvas.style.display = 'block';
+            canvas.style.opacity = '1';
+            canvas.style.zIndex = '0';
+          }
+        } else {
+          log('Canvas AR não encontrado!');
+        }
+      }
+      
       sceneEl.addEventListener('loaded', function() {
         log("A-Frame carregado!");
         updateLoadingStatus("A-Frame carregado! Inicializando AR...");
@@ -179,29 +262,49 @@
       
       sceneEl.addEventListener('renderstart', () => {
         log('Renderização iniciada!');
+        checkARVisibility();
       });
 
-      // Verificar pré-requisitos
+      sceneEl.addEventListener('video-play', () => {
+        log('Vídeo da câmera está pronto!');
+        updateCameraStatus("Vídeo da câmera ativo");
+        loadingScreen.style.display = 'none';
+      });
+      
       if (checkPrerequisites()) {
-        // Mostrar depuração
         debugBox.style.display = 'block';
       }
       
-      // Fallback para inicialização manual após 5 segundos se necessário
+      setInterval(checkARVisibility, 3000);
+      
       setTimeout(() => {
         if (loadingScreen.style.display !== 'none') {
           updateLoadingStatus("Carregamento lento detectado. Tentando alternativas...");
           initMindARManually();
         }
-      }, 5000);
+      }, 3000);
       
-      // Último recurso - mostrar opção de reiniciar após 15 segundos
       setTimeout(() => {
-        if (loadingScreen.style.display !== 'none') {
-          updateLoadingStatus("AR não iniciou. Tente reiniciar ou verificar a conexão.");
-          restartButton.style.display = 'block';
+        if (loadingScreen.style.display === 'none') {
+          const switchButton = document.createElement('button');
+          switchButton.textContent = 'Trocar Câmera';
+          switchButton.style.position = 'fixed';
+          switchButton.style.top = '10px';
+          switchButton.style.right = '10px';
+          switchButton.style.zIndex = '1000';
+          switchButton.style.padding = '10px';
+          
+          switchButton.onclick = function() {
+            const currentFacingMode = sceneEl.getAttribute('mindar-image').facingMode || 'environment';
+            const newFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            
+            sceneEl.setAttribute('mindar-image', 'facingMode', newFacingMode);
+            log(`Trocando para câmera: ${newFacingMode}`);
+          };
+          
+          document.body.appendChild(switchButton);
         }
-      }, 15000);
+      }, 10000);
     </script>
   </body>
 </html>
